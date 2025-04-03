@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remini जैसा फोटो एनहांसर</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .upload-container {
+            border: 2px dashed #4e73df;
+            border-radius: 10px;
+            background: rgba(78, 115, 223, 0.05);
+            transition: all 0.3s;
+        }
+        .upload-container:hover {
+            background: rgba(78, 115, 223, 0.1);
+        }
+        .comparison-container {
+            position: relative;
+            height: 400px;
+            background: #f1f1f1;
+            overflow: hidden;
+        }
+        .before-label, .after-label {
+            position: absolute;
+            top: 10px;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border-radius: 4px;
+            z-index: 10;
+        }
+        .before-label { left: 10px; }
+        .after-label { right: 10px; }
+        #comparisonSlider {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            z-index: 20;
+            cursor: col-resize;
+        }
+        #originalImage, #enhancedImage {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: white;
+        }
+        #enhancedImage {
+            clip-path: inset(0 0 0 50%);
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <h1 class="text-center mb-4"><i class="fas fa-magic"></i> Remini स्टाइल फोटो एनहांसर</h1>
+        
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="upload-container p-5 text-center" id="dropZone">
+                    <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-primary"></i>
+                    <h4>फोटो यहाँ ड्रॉप करें</h4>
+                    <p class="text-muted">या</p>
+                    <input type="file" id="fileInput" accept="image/*" class="d-none">
+                    <button class="btn btn-primary btn-lg" id="uploadBtn">
+                        <i class="fas fa-folder-open me-2"></i> फोटो चुनें
+                    </button>
+                    <div class="mt-3">
+                        <small class="text-muted">JPG, PNG या WEBP फाइल्स (अधिकतम 10MB)</small>
+                    </div>
+                </div>
+                
+                <div class="mt-3" id="progressContainer" style="display: none;">
+                    <div class="progress">
+                        <div id="enhanceProgress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <p class="text-center mt-2" id="progressText">एनहांसिंग... 0%</p>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="comparison-container p-2" id="previewSection" style="display: none;">
+                    <div class="before-label">मूल फोटो</div>
+                    <div class="after-label">एनहांस्ड फोटो</div>
+                    <img id="originalImage" class="img-fluid">
+                    <img id="enhancedImage" class="img-fluid">
+                    <input type="range" id="comparisonSlider" min="0" max="100" value="50">
+                </div>
+                
+                <div class="mt-3 text-center" id="actionButtons" style="display: none;">
+                    <button class="btn btn-success me-2" id="enhanceBtn">
+                        <i class="fas fa-bolt me-2"></i> फोटो एनहांस करें
+                    </button>
+                    <button class="btn btn-primary" id="downloadBtn" disabled>
+                        <i class="fas fa-download me-2"></i> डाउनलोड करें
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TensorFlow.js for AI enhancements -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <!-- SRCNN Model for Super Resolution -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/srgan@1.0.0/dist/srgan.min.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM Elements
+            const fileInput = document.getElementById('fileInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const dropZone = document.getElementById('dropZone');
+            const enhanceBtn = document.getElementById('enhanceBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const previewSection = document.getElementById('previewSection');
+            const actionButtons = document.getElementById('actionButtons');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('enhanceProgress');
+            const progressText = document.getElementById('progressText');
+            const originalImage = document.getElementById('originalImage');
+            const enhancedImage = document.getElementById('enhancedImage');
+            const comparisonSlider = document.getElementById('comparisonSlider');
+            
+            // Variables
+            let model;
+            let originalImageData;
+            
+            // Initialize TensorFlow.js model
+            async function initModel() {
+                console.log("Loading AI model...");
+                model = await tf.loadGraphModel('https://tfhub.dev/captain-pool/esrgan-tf2/1', {fromTFHub: true});
+                console.log("Model loaded successfully");
+            }
+            
+            // Call model initialization
+            initModel().catch(err => {
+                console.error("Model loading error:", err);
+                alert("AI मॉडल लोड करने में त्रुटि। पेज को रिफ्रेश करके दोबारा कोशिश करें।");
+            });
+            
+            // Event Listeners
+            uploadBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileSelect);
+            
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.style.backgroundColor = 'rgba(78, 115, 223, 0.2)';
+            });
+            
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.style.backgroundColor = 'rgba(78, 115, 223, 0.05)';
+            });
+            
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.style.backgroundColor = 'rgba(78, 115, 223, 0.05)';
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    handleFileSelect({ target: fileInput });
+                }
+            });
+            
+            enhanceBtn.addEventListener('click', enhanceImage);
+            downloadBtn.addEventListener('click', downloadEnhancedImage);
+            comparisonSlider.addEventListener('input', updateComparisonView);
+            
+            // Functions
+            function handleFileSelect(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                if (!file.type.match('image.*')) {
+                    alert("कृपया सिर्फ इमेज फाइल्स (JPG, PNG, WEBP) अपलोड करें");
+                    return;
+                }
+                
+                if (file.size > 10 * 1024 * 1024) {
+                    alert("फाइल का आकार 10MB से कम होना चाहिए");
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    originalImageData = event.target.result;
+                    originalImage.src = originalImageData;
+                    previewSection.style.display = 'block';
+                    actionButtons.style.display = 'block';
+                    enhancedImage.src = ''; // Clear previous enhanced image
+                    downloadBtn.disabled = true;
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            async function enhanceImage() {
+                if (!originalImageData || !model) {
+                    alert("पहले एक फोटो अपलोड करें और AI मॉडल के लोड होने का इंतज़ार करें");
+                    return;
+                }
+                
+                enhanceBtn.disabled = true;
+                progressContainer.style.display = 'block';
+                progressBar.style.width = '0%';
+                progressText.textContent = "एनहांसिंग... 0%";
+                
+                try {
+                    // Show progress (simulated)
+                    simulateProgress();
+                    
+                    // Load the image
+                    const img = new Image();
+                    img.src = originalImageData;
+                    
+                    await img.decode();
+                    
+                    // Preprocess the image
+                    let tensor = tf.browser.fromPixels(img)
+                        .toFloat()
+                        .div(tf.scalar(255.0))
+                        .expandDims();
+                    
+                    // Use AI model to enhance the image
+                    const enhancedTensor = await model.predict(tensor);
+                    
+                    // Convert back to image
+                    const enhancedArray = await tf.browser.toPixels(enhancedTensor.squeeze());
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width * 2; // Super resolution 2x
+                    canvas.height = img.height * 2;
+                    const ctx = canvas.getContext('2d');
+                    const imageData = new ImageData(enhancedArray, canvas.width, canvas.height);
+                    ctx.putImageData(imageData, 0, 0);
+                    
+                    // Apply additional enhancements (like Remini)
+                    applyReminiStyleEnhancements(canvas).then(finalCanvas => {
+                        enhancedImage.src = finalCanvas.toDataURL('image/jpeg', 0.9);
+                        downloadBtn.disabled = false;
+                        progressBar.style.width = '100%';
+                        progressText.textContent = "एनहांसिंग पूर्ण!";
+                        
+                        // Show comparison slider
+                        updateComparisonView();
+                    });
+                    
+                } catch (error) {
+                    console.error("Enhancement error:", error);
+                    alert("फोटो एनहांस करने में त्रुटि: " + error.message);
+                    progressText.textContent = "त्रुटि हुई!";
+                } finally {
+                    enhanceBtn.disabled = false;
+                }
+            }
+            
+            function simulateProgress() {
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += Math.random() * 10;
+                    if (progress >= 90) {
+                        clearInterval(interval);
+                        return;
+                    }
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `एनहांसिंग... ${Math.floor(progress)}%`;
+                }, 300);
+            }
+            
+            async function applyReminiStyleEnhancements(canvas) {
+                // Create a temporary canvas for additional processing
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                // Step 1: Apply sharpening (like Remini)
+                tempCtx.filter = 'contrast(1.2) saturate(1.1)';
+                tempCtx.drawImage(canvas, 0, 0);
+                
+                // Step 2: Apply face enhancement (if detected)
+                // Note: In a real app, you would use face detection API
+                
+                return tempCanvas;
+            }
+            
+            function updateComparisonView() {
+                const value = comparisonSlider.value;
+                enhancedImage.style.clipPath = `inset(0 0 0 ${value}%)`;
+            }
+            
+            function downloadEnhancedImage() {
+                if (!enhancedImage.src) return;
+                
+                const link = document.createElement('a');
+                link.href = enhancedImage.src;
+                link.download = `enhanced_${new Date().getTime()}.jpg`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        });
+    </script>
+</body>
+</html>
