@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIP फोटो एन्हांसर</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>VIP फोटो एन्हांसर</h1>
+        <p>अपनी फोटो को साफ़ और चमकदार बनाएं!</p>
+        <div class="upload-section">
+            <input type="file" id="imageUpload" accept="image/*">
+            <button onclick="autoEnhance()" class="enhance-btn">एन्हांस करें</button>
+            <button onclick="resetEnhancements()" class="reset-btn">वापस लाएं</button>
+        </div>
+
+        <div class="image-container">
+            <div class="image-box">
+                <h3>पहले</h3>
+                <canvas id="beforeCanvas"></canvas>
+            </div>
+            <div class="image-box">
+                <h3>बाद में</h3>
+                <canvas id="afterCanvas"></canvas>
+            </div>
+        </div>
+
+        <button class="download-btn" onclick="downloadEnhancedImage()">एन्हांस्ड फोटो डाउनलोड</button>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
